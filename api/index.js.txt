@@ -1,0 +1,43 @@
+// api/index.js
+const express = require('express');
+const serverless = require('serverless-http');
+const fetch = require('node-fetch');
+
+const app = express();
+app.use(express.json());
+
+// POST /api/start — receives form JSON from your frontend, forwards to n8n, returns {jobId}
+app.post('/api/start', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const jobId = Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+    const n8nUrl = process.env.N8N_START_URL;
+    if (!n8nUrl) {
+      return res.status(500).json({ error: 'Missing N8N_START_URL env' });
+    }
+
+    // Forward to your n8n Webhook
+    const r = await fetch(n8nUrl, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ jobId, ...body })
+    });
+
+    if (!r.ok) {
+      const txt = await r.text().catch(()=> '');
+      return res.status(500).json({ error: 'n8n_start_failed', detail: txt });
+    }
+
+    return res.json({ jobId });
+  } catch (e) {
+    return res.status(500).json({ error: 'server_error', detail: e?.message });
+  }
+});
+
+// GET /api/health — simple sanity check
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
+});
+
+module.exports = serverless(app);
